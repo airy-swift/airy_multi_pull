@@ -30,6 +30,10 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
+final firstKey = GlobalKey();
+final secondKey = GlobalKey();
+final thirdKey = GlobalKey();
+
 class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
@@ -39,9 +43,24 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: AiryMultiPull(
-        onRefresh: () async {
-          await Future.delayed(const Duration(seconds: 2));
-        },
+        customIndicators: [
+          PullTarget(
+            key: firstKey,
+            onPull: () {},
+            child: Icon(Icons.add),
+          ),
+          PullTarget(
+            key: secondKey,
+            onPull: () async {},
+            child: Icon(Icons.refresh),
+          ),
+          PullTarget(
+            key: thirdKey,
+            onPull: () {},
+            child: Icon(Icons.delete),
+          ),
+        ],
+        dragRatio: 1,
         child: ListView.builder(
           itemCount: 1000,
           itemBuilder: (context, index) {

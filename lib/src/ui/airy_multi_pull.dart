@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:airy_multi_pull/src/extension/double_extension.dart';
+import 'package:airy_multi_pull/src/extension/iterable_extension.dart';
+import 'package:airy_multi_pull/src/ui/pull_target.dart';
 import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter/material.dart';
 
@@ -8,8 +11,6 @@ const double _kDragContainerExtentPercentage = 0.25;
 const double _kDragSizeFactorLimit = 1.5;
 const Duration _kIndicatorSnapDuration = Duration(milliseconds: 150);
 const Duration _kIndicatorScaleDuration = Duration(milliseconds: 200);
-
-typedef RefreshCallback = Future<void> Function();
 
 enum RefreshIndicatorStatus {
   drag,
@@ -31,7 +32,6 @@ class AiryMultiPull extends StatefulWidget {
     required this.child,
     this.displacement = 40.0,
     this.edgeOffset = 0.0,
-    required this.onRefresh,
     this.color,
     this.backgroundColor,
     this.notificationPredicate = defaultScrollNotificationPredicate,
@@ -41,13 +41,16 @@ class AiryMultiPull extends StatefulWidget {
     this.triggerMode = RefreshIndicatorTriggerMode.onEdge,
     this.elevation = 2.0,
     this.onStatusChange,
-    this.targetIndicator, // New property
+    this.targetIndicator,
+    this.dragRatio,
+    required this.customIndicators,
+    this.circleMoveDuration = const Duration(milliseconds: 300),
+    this.circleMoveCurve = Curves.easeInOut,
   }) : assert(elevation >= 0.0);
 
   final Widget child;
   final double displacement;
   final double edgeOffset;
-  final RefreshCallback onRefresh;
   final ValueChanged<RefreshIndicatorStatus?>? onStatusChange;
   final Color? color;
   final Color? backgroundColor;
@@ -57,7 +60,11 @@ class AiryMultiPull extends StatefulWidget {
   final double strokeWidth;
   final RefreshIndicatorTriggerMode triggerMode;
   final double elevation;
-  final Widget? targetIndicator; // New property
+  final Widget? targetIndicator;
+  final double? dragRatio;
+  final List<PullTarget> customIndicators;
+  final Duration circleMoveDuration;
+  final Curve circleMoveCurve;
 
   @override
   AiryMultiPullState createState() => AiryMultiPullState();
@@ -76,7 +83,13 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
   late Future<void> _pendingRefreshFuture;
   bool? _isIndicatorAtTop;
   double? _dragOffset;
+  double? _dragXOffset;
+  late double _screenWidth;
   late Color _effectiveValueColor = widget.color ?? Theme.of(context).colorScheme.primary;
+
+  List<double> _customIndicatorXCenters = [];
+
+  int _previousTargetIndex = 0;
 
   static final Animatable<double> _threeQuarterTween = Tween<double>(
     begin: 0.0,
@@ -98,10 +111,14 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
     super.initState();
     _positionController = AnimationController(vsync: this);
     _scaleController = AnimationController(vsync: this);
-    _targetIndicatorPositionXController = AnimationController(vsync: this);
+    _targetIndicatorPositionXController = AnimationController(vsync: this, duration: Duration(seconds: 1));
     _positionFactor = _positionController.drive(_kDragSizeFactorLimitTween);
     _value = _positionController.drive(_threeQuarterTween);
     _scaleFactor = _scaleController.drive(_oneToZeroTween);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _screenWidth = MediaQuery.of(context).size.width;
+    });
   }
 
   @override
@@ -163,6 +180,18 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
         _status = RefreshIndicatorStatus.drag;
         widget.onStatusChange?.call(_status);
       });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _customIndicatorXCenters = widget.customIndicators.map((indicator) {
+          final key = indicator.key as GlobalKey;
+          final RenderBox renderBox = key.currentContext!.findRenderObject() as RenderBox;
+          final Offset position = renderBox.localToGlobal(Offset.zero);
+          return position.dx + renderBox.size.width / 2;
+        }).toList();
+        final centerIndex = _customIndicatorXCenters.getCenterIndex();
+        _targetIndicatorPositionXController.value = _customIndicatorXCenters[centerIndex] / _screenWidth;
+      });
+
       return false;
     }
     final bool? indicatorAtTopNow = switch (notification.metrics.axisDirection) {
@@ -182,6 +211,11 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
         }
         _checkDragOffset(notification.metrics.viewportDimension);
       }
+
+      if (_status == RefreshIndicatorStatus.armed && notification.dragDetails != null) {
+        _updateTargetPositionXByDragX(notification.dragDetails!);
+      }
+
       if (_status == RefreshIndicatorStatus.armed && notification.dragDetails == null) {
         _show();
       }
@@ -192,6 +226,11 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
         } else if (notification.metrics.axisDirection == AxisDirection.up) {
           _dragOffset = _dragOffset! + notification.overscroll;
         }
+
+        if (_status == RefreshIndicatorStatus.armed && notification.dragDetails != null) {
+          _updateTargetPositionXByDragX(notification.dragDetails!);
+        }
+
         _checkDragOffset(notification.metrics.viewportDimension);
       }
     } else if (notification is ScrollEndNotification) {
@@ -213,6 +252,22 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
       }
     }
     return false;
+  }
+
+  void _updateTargetPositionXByDragX(DragUpdateDetails dragDetails) {
+    _dragXOffset = dragDetails.globalPosition.dx;
+    final (targetIndex, closestValue) = _customIndicatorXCenters.closestValue(_dragXOffset!);
+    final ratio = closestValue / _screenWidth;
+    if (_previousTargetIndex == targetIndex) {
+      return;
+    }
+    _previousTargetIndex = targetIndex;
+    _targetIndicatorPositionXController.animateTo(
+      ratio,
+      duration: widget.circleMoveDuration,
+      curve: widget.circleMoveCurve,
+    );
+    setState(() {});
   }
 
   bool _handleIndicatorNotification(OverscrollIndicatorNotification notification) {
@@ -298,13 +353,8 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
           _status = RefreshIndicatorStatus.refresh;
         });
 
-        final Future<void> refreshResult = widget.onRefresh();
-        refreshResult.whenComplete(() {
-          if (mounted && _status == RefreshIndicatorStatus.refresh) {
-            completer.complete();
-            _dismiss(RefreshIndicatorStatus.done);
-          }
-        });
+        completer.complete();
+        _dismiss(RefreshIndicatorStatus.done);
       }
     });
   }
@@ -366,50 +416,27 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
                         return Stack(
                           alignment: Alignment.center,
                           children: [
-                            widget.targetIndicator ?? Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[300],
-                                shape: BoxShape.circle,
+                            AnimatedBuilder(
+                              animation: _targetIndicatorPositionXController,
+                              builder: (context, child) => Transform.translate(
+                                offset: Offset((_targetIndicatorPositionXController.value - 0.5) * _screenWidth, 0),
+                                child: widget.targetIndicator ??
+                                    Container(
+                                      width: 80,
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[300],
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
                               ),
                             ),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                RefreshProgressIndicator(
-                                  semanticsLabel: widget.semanticsLabel ?? MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
-                                  semanticsValue: widget.semanticsValue,
-                                  value: showIndeterminateIndicator ? null : _value.value,
-                                  valueColor: _valueColor,
-                                  backgroundColor: widget.backgroundColor,
-                                  strokeWidth: widget.strokeWidth,
-                                  elevation: widget.elevation,
-                                ),
-                                RefreshProgressIndicator(
-                                  semanticsLabel: widget.semanticsLabel ?? MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
-                                  semanticsValue: widget.semanticsValue,
-                                  value: showIndeterminateIndicator ? null : _value.value,
-                                  valueColor: _valueColor,
-                                  backgroundColor: widget.backgroundColor,
-                                  strokeWidth: widget.strokeWidth,
-                                  elevation: widget.elevation,
-                                ),
-                                RefreshProgressIndicator(
-                                  semanticsLabel: widget.semanticsLabel ?? MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
-                                  semanticsValue: widget.semanticsValue,
-                                  value: showIndeterminateIndicator ? null : _value.value,
-                                  valueColor: _valueColor,
-                                  backgroundColor: widget.backgroundColor,
-                                  strokeWidth: widget.strokeWidth,
-                                  elevation: widget.elevation,
-                                ),
+                                ...widget.customIndicators,
                               ],
                             ),
-                            // CircularProgressIndicator(
-                            //   value: _targetIndicatorPositionXController.value,
-                            //   valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-                            // ),
                           ],
                         );
                       },
