@@ -38,7 +38,7 @@ class AiryMultiPull extends StatefulWidget {
     this.semanticsLabel,
     this.semanticsValue,
     this.strokeWidth = RefreshProgressIndicator.defaultStrokeWidth,
-    this.triggerMode = RefreshIndicatorTriggerMode.onEdge,
+    this.triggerMode = RefreshIndicatorTriggerMode.anywhere,
     this.elevation = 2.0,
     this.onStatusChange,
     this.targetIndicator,
