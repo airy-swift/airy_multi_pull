@@ -33,6 +33,8 @@ class MyHomePage extends StatefulWidget {
 final firstKey = GlobalKey();
 final secondKey = GlobalKey();
 final thirdKey = GlobalKey();
+final fourthKey = GlobalKey();
+final fifthKey = GlobalKey();
 
 class _MyHomePageState extends State<MyHomePage> {
   @override
@@ -46,17 +48,38 @@ class _MyHomePageState extends State<MyHomePage> {
         customIndicators: [
           PullTarget(
             key: firstKey,
-            onPull: () {},
+            onPull: () async {
+              await Future<void>.delayed(const Duration(seconds: 2));
+              print('First');
+            },
             child: Icon(Icons.add),
           ),
           PullTarget(
             key: secondKey,
-            onPull: () async {},
+            onPull: () {
+              print('Second');
+            },
             child: Icon(Icons.refresh),
           ),
           PullTarget(
             key: thirdKey,
-            onPull: () {},
+            onPull: () {
+              print('Third');
+            },
+            child: Icon(Icons.delete),
+          ),
+          PullTarget(
+            key: fourthKey,
+            onPull: () async {
+              print('Fourth');
+            },
+            child: Icon(Icons.refresh),
+          ),
+          PullTarget(
+            key: fifthKey,
+            onPull: () async {
+              print('Fifth');
+            },
             child: Icon(Icons.delete),
           ),
         ],

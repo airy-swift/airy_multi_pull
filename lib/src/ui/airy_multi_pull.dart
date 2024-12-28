@@ -267,7 +267,6 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
       duration: widget.circleMoveDuration,
       curve: widget.circleMoveCurve,
     );
-    setState(() {});
   }
 
   bool _handleIndicatorNotification(OverscrollIndicatorNotification notification) {
@@ -340,6 +339,8 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
     }
   }
 
+  bool _processByFuture = false;
+
   void _show() {
     assert(_status != RefreshIndicatorStatus.refresh);
     assert(_status != RefreshIndicatorStatus.snap);
@@ -353,8 +354,24 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
           _status = RefreshIndicatorStatus.refresh;
         });
 
-        completer.complete();
-        _dismiss(RefreshIndicatorStatus.done);
+        final targetPullCallback = widget.customIndicators[_previousTargetIndex].onPull;
+        final FutureOr<void> refreshResult = targetPullCallback();
+
+        if (refreshResult is Future<void>) {
+          _processByFuture = true;
+          refreshResult.whenComplete(() {
+            if (mounted && _status == RefreshIndicatorStatus.refresh) {
+              completer.complete();
+              _dismiss(RefreshIndicatorStatus.done);
+            }
+          });
+        } else {
+          _processByFuture = false;
+          if (mounted && _status == RefreshIndicatorStatus.refresh) {
+            completer.complete();
+            _dismiss(RefreshIndicatorStatus.done);
+          }
+        }
       }
     });
   }
@@ -420,22 +437,37 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
                               animation: _targetIndicatorPositionXController,
                               builder: (context, child) => Transform.translate(
                                 offset: Offset((_targetIndicatorPositionXController.value - 0.5) * _screenWidth, 0),
-                                child: widget.targetIndicator ??
-                                    Container(
-                                      width: 80,
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[300],
-                                        shape: BoxShape.circle,
+                                child: Visibility(
+                                  visible: !showIndeterminateIndicator,
+                                  child: widget.targetIndicator ??
+                                      Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.withValues(alpha: 0.3),
+                                          shape: BoxShape.circle,
+                                        ),
                                       ),
-                                    ),
+                                ),
                               ),
                             ),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                ...widget.customIndicators,
-                              ],
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 800),
+                              reverseDuration: const Duration(milliseconds: 800),
+                              child: _processByFuture && [RefreshIndicatorStatus.refresh, RefreshIndicatorStatus.done].contains(_status)
+                                  ? RefreshProgressIndicator(
+                                      semanticsLabel: widget.semanticsLabel ?? MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
+                                      semanticsValue: widget.semanticsValue,
+                                      value: showIndeterminateIndicator ? null : _value.value,
+                                      valueColor: _valueColor,
+                                      backgroundColor: widget.backgroundColor,
+                                      strokeWidth: widget.strokeWidth,
+                                      elevation: widget.elevation,
+                                    )
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: widget.customIndicators,
+                                    ),
                             ),
                           ],
                         );
