@@ -1,5 +1,3 @@
-/// A Calculator.
-class Calculator {
-  /// Returns [value] plus 1.
-  int addOne(int value) => value + 1;
-}
+library airy_multi_pull;
+
+export 'src/ui/airy_multi_pull.dart';
