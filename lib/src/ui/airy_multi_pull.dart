@@ -41,6 +41,7 @@ class AiryMultiPull extends StatefulWidget {
     this.triggerMode = RefreshIndicatorTriggerMode.onEdge,
     this.elevation = 2.0,
     this.onStatusChange,
+    this.targetIndicator, // New property
   }) : assert(elevation >= 0.0);
 
   final Widget child;
@@ -56,6 +57,7 @@ class AiryMultiPull extends StatefulWidget {
   final double strokeWidth;
   final RefreshIndicatorTriggerMode triggerMode;
   final double elevation;
+  final Widget? targetIndicator; // New property
 
   @override
   AiryMultiPullState createState() => AiryMultiPullState();
@@ -64,6 +66,7 @@ class AiryMultiPull extends StatefulWidget {
 class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMixin<AiryMultiPull> {
   late AnimationController _positionController;
   late AnimationController _scaleController;
+  late AnimationController _targetIndicatorPositionXController;
   late Animation<double> _positionFactor;
   late Animation<double> _scaleFactor;
   late Animation<double> _value;
@@ -94,9 +97,10 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
   void initState() {
     super.initState();
     _positionController = AnimationController(vsync: this);
+    _scaleController = AnimationController(vsync: this);
+    _targetIndicatorPositionXController = AnimationController(vsync: this);
     _positionFactor = _positionController.drive(_kDragSizeFactorLimitTween);
     _value = _positionController.drive(_threeQuarterTween);
-    _scaleController = AnimationController(vsync: this);
     _scaleFactor = _scaleController.drive(_oneToZeroTween);
   }
 
@@ -118,6 +122,7 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
   void dispose() {
     _positionController.dispose();
     _scaleController.dispose();
+    _targetIndicatorPositionXController.dispose();
     super.dispose();
   }
 
@@ -358,14 +363,54 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
                     child: AnimatedBuilder(
                       animation: _positionController,
                       builder: (BuildContext context, Widget? child) {
-                        return RefreshProgressIndicator(
-                          semanticsLabel: widget.semanticsLabel ?? MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
-                          semanticsValue: widget.semanticsValue,
-                          value: showIndeterminateIndicator ? null : _value.value,
-                          valueColor: _valueColor,
-                          backgroundColor: widget.backgroundColor,
-                          strokeWidth: widget.strokeWidth,
-                          elevation: widget.elevation,
+                        return Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            widget.targetIndicator ?? Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                RefreshProgressIndicator(
+                                  semanticsLabel: widget.semanticsLabel ?? MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
+                                  semanticsValue: widget.semanticsValue,
+                                  value: showIndeterminateIndicator ? null : _value.value,
+                                  valueColor: _valueColor,
+                                  backgroundColor: widget.backgroundColor,
+                                  strokeWidth: widget.strokeWidth,
+                                  elevation: widget.elevation,
+                                ),
+                                RefreshProgressIndicator(
+                                  semanticsLabel: widget.semanticsLabel ?? MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
+                                  semanticsValue: widget.semanticsValue,
+                                  value: showIndeterminateIndicator ? null : _value.value,
+                                  valueColor: _valueColor,
+                                  backgroundColor: widget.backgroundColor,
+                                  strokeWidth: widget.strokeWidth,
+                                  elevation: widget.elevation,
+                                ),
+                                RefreshProgressIndicator(
+                                  semanticsLabel: widget.semanticsLabel ?? MaterialLocalizations.of(context).refreshIndicatorSemanticLabel,
+                                  semanticsValue: widget.semanticsValue,
+                                  value: showIndeterminateIndicator ? null : _value.value,
+                                  valueColor: _valueColor,
+                                  backgroundColor: widget.backgroundColor,
+                                  strokeWidth: widget.strokeWidth,
+                                  elevation: widget.elevation,
+                                ),
+                              ],
+                            ),
+                            // CircularProgressIndicator(
+                            //   value: _targetIndicatorPositionXController.value,
+                            //   valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                            // ),
+                          ],
                         );
                       },
                     ),
