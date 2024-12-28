@@ -171,6 +171,8 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
         _start(notification.metrics.axisDirection);
   }
 
+  double? _relativeStartPointX;
+
   bool _handleScrollNotification(ScrollNotification notification) {
     if (!widget.notificationPredicate(notification)) {
       return false;
@@ -203,6 +205,8 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
         _dismiss(RefreshIndicatorStatus.canceled);
       }
     } else if (notification is ScrollUpdateNotification) {
+      _relativeStartPointX ??= notification.dragDetails?.globalPosition.dx;
+
       if (_status == RefreshIndicatorStatus.drag || _status == RefreshIndicatorStatus.armed) {
         if (notification.metrics.axisDirection == AxisDirection.down) {
           _dragOffset = _dragOffset! - notification.scrollDelta!;
@@ -220,6 +224,8 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
         _show();
       }
     } else if (notification is OverscrollNotification) {
+      _relativeStartPointX ??= notification.dragDetails?.globalPosition.dx;
+
       if (_status == RefreshIndicatorStatus.drag || _status == RefreshIndicatorStatus.armed) {
         if (notification.metrics.axisDirection == AxisDirection.down) {
           _dragOffset = _dragOffset! - notification.overscroll;
@@ -255,7 +261,14 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
   }
 
   void _updateTargetPositionXByDragX(DragUpdateDetails dragDetails) {
-    _dragXOffset = dragDetails.globalPosition.dx;
+    if (_relativeStartPointX == null) return;
+
+    // Calculate the relative movement from the start point
+    final double relativeMovement = dragDetails.globalPosition.dx - _relativeStartPointX!;
+
+    // Convert the relative movement to an absolute position
+    _dragXOffset = (_screenWidth / 2) + relativeMovement;
+
     final (targetIndex, closestValue) = _customIndicatorXCenters.closestValue(_dragXOffset!);
     final ratio = closestValue / _screenWidth;
     if (_previousTargetIndex == targetIndex) {
@@ -268,6 +281,22 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
       curve: widget.circleMoveCurve,
     );
   }
+
+  // void _updateTargetPositionXByDragX(DragUpdateDetails dragDetails) {
+  //   _dragXOffset = dragDetails.globalPosition.dx;
+  //
+  //   final (targetIndex, closestValue) = _customIndicatorXCenters.closestValue(_dragXOffset!);
+  //   final ratio = closestValue / _screenWidth;
+  //   if (_previousTargetIndex == targetIndex) {
+  //     return;
+  //   }
+  //   _previousTargetIndex = targetIndex;
+  //   _targetIndicatorPositionXController.animateTo(
+  //     ratio,
+  //     duration: widget.circleMoveDuration,
+  //     curve: widget.circleMoveCurve,
+  //   );
+  // }
 
   bool _handleIndicatorNotification(OverscrollIndicatorNotification notification) {
     if (notification.depth != 0 || !notification.leading) {
@@ -355,20 +384,20 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
         final targetPullCallback = widget.customIndicators[_previousTargetIndex].onPull;
         final FutureOr<void> refreshResult = targetPullCallback();
 
-        if (refreshResult is Future<void>) {
-          _processByFuture = true;
-          refreshResult.whenComplete(() {
-            if (mounted && _status == RefreshIndicatorStatus.refresh) {
-              completer.complete();
-              _dismiss(RefreshIndicatorStatus.done);
-            }
-          });
-        } else {
-          _processByFuture = false;
+        complete() {
           if (mounted && _status == RefreshIndicatorStatus.refresh) {
             completer.complete();
             _dismiss(RefreshIndicatorStatus.done);
+            _relativeStartPointX = null;
           }
+        }
+
+        if (refreshResult is Future<void>) {
+          _processByFuture = true;
+          refreshResult.whenComplete(complete);
+        } else {
+          _processByFuture = false;
+          complete();
         }
       }
     });
