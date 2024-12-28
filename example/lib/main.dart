@@ -50,35 +50,35 @@ class _MyHomePageState extends State<MyHomePage> {
             key: firstKey,
             onPull: () async {
               await Future<void>.delayed(const Duration(seconds: 2));
-              print('First');
+              debugPrint('First');
             },
             child: Icon(Icons.add),
           ),
           PullTarget(
             key: secondKey,
             onPull: () {
-              print('Second');
+              debugPrint('Second');
             },
             child: Icon(Icons.refresh),
           ),
           PullTarget(
             key: thirdKey,
             onPull: () {
-              print('Third');
+              debugPrint('Third');
             },
             child: Icon(Icons.delete),
           ),
           PullTarget(
             key: fourthKey,
             onPull: () async {
-              print('Fourth');
+              debugPrint('Fourth');
             },
             child: Icon(Icons.refresh),
           ),
           PullTarget(
             key: fifthKey,
             onPull: () async {
-              print('Fifth');
+              debugPrint('Fifth');
             },
             child: Icon(Icons.delete),
           ),

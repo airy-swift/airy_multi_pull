@@ -88,8 +88,8 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
   late Color _effectiveValueColor = widget.color ?? Theme.of(context).colorScheme.primary;
 
   List<double> _customIndicatorXCenters = [];
-
   int _previousTargetIndex = 0;
+  bool _processByFuture = false;
 
   static final Animatable<double> _threeQuarterTween = Tween<double>(
     begin: 0.0,
@@ -111,7 +111,7 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
     super.initState();
     _positionController = AnimationController(vsync: this);
     _scaleController = AnimationController(vsync: this);
-    _targetIndicatorPositionXController = AnimationController(vsync: this, duration: Duration(seconds: 1));
+    _targetIndicatorPositionXController = AnimationController(vsync: this, duration: widget.circleMoveDuration);
     _positionFactor = _positionController.drive(_kDragSizeFactorLimitTween);
     _value = _positionController.drive(_threeQuarterTween);
     _scaleFactor = _scaleController.drive(_oneToZeroTween);
@@ -164,7 +164,7 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
 
   bool _shouldStart(ScrollNotification notification) {
     return ((notification is ScrollStartNotification && notification.dragDetails != null) ||
-        (notification is ScrollUpdateNotification && notification.dragDetails != null && widget.triggerMode == RefreshIndicatorTriggerMode.anywhere)) &&
+            (notification is ScrollUpdateNotification && notification.dragDetails != null && widget.triggerMode == RefreshIndicatorTriggerMode.anywhere)) &&
         ((notification.metrics.axisDirection == AxisDirection.up && notification.metrics.extentAfter == 0.0) ||
             (notification.metrics.axisDirection == AxisDirection.down && notification.metrics.extentBefore == 0.0)) &&
         _status == null &&
@@ -338,8 +338,6 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
       });
     }
   }
-
-  bool _processByFuture = false;
 
   void _show() {
     assert(_status != RefreshIndicatorStatus.refresh);
