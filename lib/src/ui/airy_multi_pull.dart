@@ -296,16 +296,39 @@ class AiryMultiPullState extends State<AiryMultiPull>
 
   /// カスタムインジケータの位置を計算する
   void _calculateCustomIndicatorPositions() {
-    _customIndicatorXCenters = widget.customIndicators.map((indicator) {
-      final key = indicator.key as GlobalKey;
-      final RenderBox renderBox =
-          key.currentContext!.findRenderObject() as RenderBox;
-      final Offset position = renderBox.localToGlobal(Offset.zero);
-      return position.dx + renderBox.size.width / 2;
-    }).toList();
-    final centerIndex = _customIndicatorXCenters.getCenterIndex();
-    _targetIndicatorPositionXController.value =
-        _customIndicatorXCenters[centerIndex] / _screenWidth;
+    try {
+      _customIndicatorXCenters = widget.customIndicators.map((indicator) {
+        try {
+          final key = indicator.key as GlobalKey;
+          // コンテキストがnullかチェック
+          if (key.currentContext == null) {
+            return _screenWidth / 2; // デフォルト値として画面中央を使用
+          }
+
+          final RenderBox renderBox =
+              key.currentContext!.findRenderObject() as RenderBox;
+          final Offset position = renderBox.localToGlobal(Offset.zero);
+          return position.dx + renderBox.size.width / 2;
+        } catch (e) {
+          // エラーが発生した場合はデフォルト値を使用
+          return _screenWidth / 2;
+        }
+      }).toList();
+
+      // リストが空でないことを確認
+      if (_customIndicatorXCenters.isEmpty) {
+        // デフォルトとして画面中央の位置を追加
+        _customIndicatorXCenters = [_screenWidth / 2];
+      }
+
+      final centerIndex = _customIndicatorXCenters.getCenterIndex();
+      _targetIndicatorPositionXController.value =
+          _customIndicatorXCenters[centerIndex] / _screenWidth;
+    } catch (e) {
+      // 予期せぬエラーが発生した場合も最低限の値を設定
+      _customIndicatorXCenters = [_screenWidth / 2];
+      _targetIndicatorPositionXController.value = 0.5; // 画面中央
+    }
   }
 
   /// スクロール方向を検出する
@@ -441,6 +464,13 @@ class AiryMultiPullState extends State<AiryMultiPull>
 
   void _updateTargetPositionXByDragX(DragUpdateDetails dragDetails) {
     if (_relativeStartPointX == null) return;
+
+    // カスタムインジケータのリストが空の場合は処理をスキップ
+    if (_customIndicatorXCenters.isEmpty) {
+      // エラーをログに出力するだけで例外は投げない
+      // print('Warning: Custom indicator centers list is empty');
+      return;
+    }
 
     // Calculate the relative movement from the start point
     final double relativeMovement =
