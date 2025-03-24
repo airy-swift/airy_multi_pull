@@ -1,5 +1,6 @@
 import 'package:airy_multi_pull/airy_multi_pull.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(const MyApp());
@@ -45,6 +46,11 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: AiryMultiPull(
+        onArmed: () async {
+          HapticFeedback.mediumImpact();
+          await Future<void>.delayed(const Duration(milliseconds: 130));
+          HapticFeedback.lightImpact();
+        },
         customIndicators: [
           PullTarget(
             key: firstKey,

@@ -59,6 +59,7 @@ class AiryMultiPull extends StatefulWidget {
     this.triggerMode = RefreshIndicatorTriggerMode.anywhere,
     this.elevation = 2.0,
     this.onStatusChange,
+    this.onArmed,
     this.targetIndicator,
     this.dragRatio,
     required this.customIndicators,
@@ -77,6 +78,10 @@ class AiryMultiPull extends StatefulWidget {
 
   /// ステータス変更時のコールバック
   final ValueChanged<RefreshIndicatorStatus?>? onStatusChange;
+
+  /// Armed状態になったときのコールバック
+  /// ハプティックフィードバックなどのカスタム処理を追加するのに便利
+  final VoidCallback? onArmed;
 
   /// インジケータの色
   final Color? color;
@@ -554,6 +559,9 @@ class AiryMultiPullState extends State<AiryMultiPull>
         _valueColor.value!.alpha == _effectiveValueColor.alpha) {
       _status = RefreshIndicatorStatus.armed;
       widget.onStatusChange?.call(_status);
+
+      // Armed状態になったときのコールバックを呼び出す
+      widget.onArmed?.call();
     }
   }
 

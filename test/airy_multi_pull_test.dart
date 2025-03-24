@@ -322,5 +322,56 @@ void main() {
       expect(statusChanges, isNotEmpty);
       expect(statusChanges.first, airy.RefreshIndicatorStatus.drag);
     });
+
+    testWidgets('onArmedコールバックのテスト', (WidgetTester tester) async {
+      // コールバックの呼び出しを追跡
+      int armedCallCount = 0;
+
+      // テスト用のGlobalKey
+      final testKey = GlobalKey();
+
+      // テスト用ウィジェットを構築
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AiryMultiPull(
+              onArmed: () {
+                // Armed状態になったときにカウントを増やす
+                armedCallCount++;
+              },
+              customIndicators: [
+                PullTarget(
+                  key: testKey,
+                  onPull: () => Future.value(),
+                  child: const Icon(Icons.add),
+                ),
+              ],
+              child: ListView.builder(
+                itemCount: 20,
+                itemBuilder: (context, index) => ListTile(
+                  title: Text('Item $index'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // 初期状態では呼び出されていないはず
+      expect(armedCallCount, 0);
+
+      // プルダウン操作をシミュレート（Armed状態になるまで）
+      await tester.drag(find.text('Item 0'), const Offset(0, 300));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Armed状態になり、コールバックが呼び出されたか確認
+      expect(armedCallCount, 1);
+
+      // 指を離してアクションを実行
+      await tester.pumpAndSettle();
+
+      // Armed状態は一度だけなので、カウントは変わらないはず
+      expect(armedCallCount, 1);
+    });
   });
 }
