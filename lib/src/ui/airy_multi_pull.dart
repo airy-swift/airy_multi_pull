@@ -441,10 +441,12 @@ class AiryMultiPullState extends State<AiryMultiPull>
     switch (_status) {
       case RefreshIndicatorStatus.armed:
         // 元の位置に十分に近い場合はキャンセル、そうでなければアクション実行
-        if (_dragOffset! <
+        final double thresholdDistance =
             _AiryMultiPullConstants.dragCancelThreshold *
                 (MediaQuery.of(context).size.height *
-                    _AiryMultiPullConstants.dragContainerExtentPercentage)) {
+                    _AiryMultiPullConstants.dragContainerExtentPercentage);
+
+        if (_dragOffset == null || _dragOffset! < thresholdDistance) {
           _dismiss(RefreshIndicatorStatus.canceled);
         } else {
           // 指を離した時にアクションを実行
@@ -548,6 +550,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
     }
     _positionController.value = clampDouble(newValue, 0.0, 1.0);
     if (_status == RefreshIndicatorStatus.drag &&
+        _valueColor.value != null &&
         _valueColor.value!.alpha == _effectiveValueColor.alpha) {
       _status = RefreshIndicatorStatus.armed;
       widget.onStatusChange?.call(_status);
@@ -591,6 +594,17 @@ class AiryMultiPullState extends State<AiryMultiPull>
   void _show() {
     assert(_status != RefreshIndicatorStatus.refresh);
     assert(_status != RefreshIndicatorStatus.snap);
+
+    // カスタムインジケータが空の場合は早期リターン
+    if (widget.customIndicators.isEmpty) {
+      final Completer<void> completer = Completer<void>();
+      _pendingRefreshFuture = completer.future;
+      completer.complete();
+      _dismiss(RefreshIndicatorStatus.done);
+      _relativeStartPointX = null;
+      return;
+    }
+
     final Completer<void> completer = Completer<void>();
     _pendingRefreshFuture = completer.future;
     _status = RefreshIndicatorStatus.snap;
@@ -605,8 +619,10 @@ class AiryMultiPullState extends State<AiryMultiPull>
         });
 
         // 選択されたターゲットのコールバックを実行
-        final targetPullCallback =
-            widget.customIndicators[_previousTargetIndex].onPull;
+        // 安全のため範囲チェックを追加
+        final targetIndex =
+            _previousTargetIndex.clamp(0, widget.customIndicators.length - 1);
+        final targetPullCallback = widget.customIndicators[targetIndex].onPull;
         final FutureOr<void> refreshResult = targetPullCallback();
 
         // コールバック完了時の処理
