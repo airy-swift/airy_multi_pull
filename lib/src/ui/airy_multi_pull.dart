@@ -20,6 +20,9 @@ class _AiryMultiPullConstants {
 
   /// インジケータスケールのアニメーション時間
   static const Duration indicatorScaleDuration = Duration(milliseconds: 200);
+
+  /// ドラッグキャンセルの閾値（この値以下になるとキャンセルされる）
+  static const double dragCancelThreshold = 0.3;
 }
 
 /// リフレッシュインジケータの状態を表す列挙型
@@ -140,6 +143,9 @@ class AiryMultiPullState extends State<AiryMultiPull>
   List<double> _customIndicatorXCenters = [];
   int _previousTargetIndex = 0;
   bool _processByFuture = false;
+
+  // スクロール開始時の位置を記録
+  double? _initialDragOffset;
 
   static final Animatable<double> _threeQuarterTween = Tween<double>(
     begin: 0.0,
@@ -262,7 +268,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
       return _handleOverscroll(notification);
     }
 
-    // スクロール終了の処理
+    // スクロール終了の処理（指を離した時）
     if (notification is ScrollEndNotification) {
       return _handleScrollEnd();
     }
@@ -276,6 +282,10 @@ class AiryMultiPullState extends State<AiryMultiPull>
       _status = RefreshIndicatorStatus.drag;
       widget.onStatusChange?.call(_status);
     });
+
+    // 初期ドラッグオフセットを記録（スクロール開始位置）
+    _initialDragOffset = 0.0;
+    _dragOffset = 0.0;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculateCustomIndicatorPositions();
@@ -312,21 +322,34 @@ class AiryMultiPullState extends State<AiryMultiPull>
 
     if (_status == RefreshIndicatorStatus.drag ||
         _status == RefreshIndicatorStatus.armed) {
+      final double oldDragOffset = _dragOffset!;
+
       _updateDragOffset(
-        notification.metrics.axisDirection,
-        notification.scrollDelta!,
-      );
+          notification.metrics.axisDirection, notification.scrollDelta!);
+
+      // キャンセル判定: Y軸方向でスクロール開始位置付近に戻ったか
+      if (_status == RefreshIndicatorStatus.armed) {
+        // ドラッグが元の位置に近づいている（上方向へのスクロール）
+        if (_dragOffset! < oldDragOffset) {
+          // 閾値よりも小さくなったらキャンセル
+          final double thresholdDistance =
+              _AiryMultiPullConstants.dragCancelThreshold *
+                  (notification.metrics.viewportDimension *
+                      _AiryMultiPullConstants.dragContainerExtentPercentage);
+
+          if (_dragOffset! <= thresholdDistance) {
+            _dismiss(RefreshIndicatorStatus.canceled);
+            return false;
+          }
+        }
+      }
+
       _checkDragOffset(notification.metrics.viewportDimension);
     }
 
     if (_status == RefreshIndicatorStatus.armed &&
         notification.dragDetails != null) {
       _updateTargetPositionXByDragX(notification.dragDetails!);
-    }
-
-    if (_status == RefreshIndicatorStatus.armed &&
-        notification.dragDetails == null) {
-      _show();
     }
 
     return false;
@@ -338,11 +361,28 @@ class AiryMultiPullState extends State<AiryMultiPull>
 
     if (_status == RefreshIndicatorStatus.drag ||
         _status == RefreshIndicatorStatus.armed) {
+      final double oldDragOffset = _dragOffset!;
+
       _updateDragOffset(
-        notification.metrics.axisDirection,
-        notification.overscroll,
-        isOverscroll: true,
-      );
+          notification.metrics.axisDirection, notification.overscroll,
+          isOverscroll: true);
+
+      // キャンセル判定: Y軸方向でスクロール開始位置付近に戻ったか
+      if (_status == RefreshIndicatorStatus.armed) {
+        // ドラッグが元の位置に近づいている（上方向へのスクロール）
+        if (_dragOffset! < oldDragOffset) {
+          // 閾値よりも小さくなったらキャンセル
+          final double thresholdDistance =
+              _AiryMultiPullConstants.dragCancelThreshold *
+                  (notification.metrics.viewportDimension *
+                      _AiryMultiPullConstants.dragContainerExtentPercentage);
+
+          if (_dragOffset! <= thresholdDistance) {
+            _dismiss(RefreshIndicatorStatus.canceled);
+            return false;
+          }
+        }
+      }
 
       if (_status == RefreshIndicatorStatus.armed &&
           notification.dragDetails != null) {
@@ -363,15 +403,28 @@ class AiryMultiPullState extends State<AiryMultiPull>
     } else if (direction == AxisDirection.up) {
       _dragOffset = _dragOffset! + delta;
     }
+
+    // ドラッグオフセットが負の値にならないようにする
+    if (_dragOffset! < 0.0) {
+      _dragOffset = 0.0;
+    }
+
+    // デバッグ情報（必要に応じてコメントアウト）
+    // print('Drag offset: $_dragOffset, delta: $delta, direction: $direction');
   }
 
-  /// スクロール終了時の処理
+  /// スクロール終了時の処理（指を離した時）
   bool _handleScrollEnd() {
     switch (_status) {
       case RefreshIndicatorStatus.armed:
-        if (_positionController.value < 1.0) {
+        // 元の位置に十分に近い場合はキャンセル、そうでなければアクション実行
+        if (_dragOffset! <
+            _AiryMultiPullConstants.dragCancelThreshold *
+                (MediaQuery.of(context).size.height *
+                    _AiryMultiPullConstants.dragContainerExtentPercentage)) {
           _dismiss(RefreshIndicatorStatus.canceled);
         } else {
+          // 指を離した時にアクションを実行
           _show();
         }
       case RefreshIndicatorStatus.drag:
@@ -450,6 +503,15 @@ class AiryMultiPullState extends State<AiryMultiPull>
     double newValue = _dragOffset! /
         (containerExtent *
             _AiryMultiPullConstants.dragContainerExtentPercentage);
+
+    // ドラッグオフセットが閾値以下の場合、armed状態からドラッグ状態に戻す
+    if (_status == RefreshIndicatorStatus.armed &&
+        newValue < _AiryMultiPullConstants.dragCancelThreshold) {
+      // armed状態からキャンセルするには閾値よりも小さくなる必要がある
+      // ただし、ここではすぐにキャンセルせず、スクロール位置を監視する
+      // 実際のキャンセルは_handleScrollUpdateで行う
+    }
+
     if (_status == RefreshIndicatorStatus.armed) {
       newValue =
           math.max(newValue, 1.0 / _AiryMultiPullConstants.dragSizeFactorLimit);
