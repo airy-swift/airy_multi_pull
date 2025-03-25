@@ -19,7 +19,7 @@
 
 ```yaml
 dependencies:
-  airy_multi_pull: ^0.0.2
+  airy_multi_pull: ^0.0.3
 ```
 
 コマンドラインから:

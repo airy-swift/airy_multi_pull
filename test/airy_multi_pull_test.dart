@@ -291,7 +291,7 @@ void main() {
           home: Scaffold(
             body: AiryMultiPull(
               onStatusChange: (status) {
-                statusChanges.add(status as airy.RefreshIndicatorStatus?);
+                statusChanges.add(status);
               },
               customIndicators: [
                 PullTarget(
