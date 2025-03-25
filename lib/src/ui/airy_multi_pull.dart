@@ -42,7 +42,7 @@ class AiryMultiPull extends StatefulWidget {
   const AiryMultiPull({
     super.key,
     required this.child,
-    this.displacement = 40.0,
+    this.displacement = 20.0,
     this.edgeOffset = 0.0,
     this.notificationPredicate = defaultScrollNotificationPredicate,
     this.elevation = 2.0,
