@@ -35,12 +35,6 @@ enum RefreshIndicatorStatus {
   canceled,
 }
 
-/// リフレッシュインジケータのトリガーモードを表す列挙型
-enum RefreshIndicatorTriggerMode {
-  anywhere,
-  onEdge,
-}
-
 /// 複数のプルターゲットを持つカスタムリフレッシュインジケータウィジェット
 /// ユーザーは下方向にスクロールし、複数のアクションターゲットから選択できる
 class AiryMultiPull extends StatefulWidget {
@@ -50,13 +44,7 @@ class AiryMultiPull extends StatefulWidget {
     required this.child,
     this.displacement = 40.0,
     this.edgeOffset = 0.0,
-    this.color,
-    this.backgroundColor,
     this.notificationPredicate = defaultScrollNotificationPredicate,
-    this.semanticsLabel,
-    this.semanticsValue,
-    this.strokeWidth = RefreshProgressIndicator.defaultStrokeWidth,
-    this.triggerMode = RefreshIndicatorTriggerMode.anywhere,
     this.elevation = 2.0,
     this.onStatusChange,
     this.onArmed,
@@ -83,26 +71,8 @@ class AiryMultiPull extends StatefulWidget {
   /// ハプティックフィードバックなどのカスタム処理を追加するのに便利
   final VoidCallback? onArmed;
 
-  /// インジケータの色
-  final Color? color;
-
-  /// インジケータの背景色
-  final Color? backgroundColor;
-
   /// スクロール通知のフィルター
   final ScrollNotificationPredicate notificationPredicate;
-
-  /// アクセシビリティのためのセマンティクスラベル
-  final String? semanticsLabel;
-
-  /// アクセシビリティのためのセマンティクス値
-  final String? semanticsValue;
-
-  /// プログレスインジケータのストロークの幅
-  final double strokeWidth;
-
-  /// リフレッシュインジケータのトリガーモード
-  final RefreshIndicatorTriggerMode triggerMode;
 
   /// インジケータの影の高さ
   final double elevation;
@@ -142,15 +112,14 @@ class AiryMultiPullState extends State<AiryMultiPull>
   double? _dragOffset;
   double? _dragXOffset;
   late double _screenWidth;
-  late Color _effectiveValueColor =
-      widget.color ?? Theme.of(context).colorScheme.primary;
+  late Color _effectiveValueColor = Theme.of(context).colorScheme.primary;
 
   List<double> _customIndicatorXCenters = [];
   int _previousTargetIndex = 0;
   bool _processByFuture = false;
 
-  // スクロール開始時の位置を記録
-  double? _initialDragOffset;
+  // 水平方向のドラッグ開始位置
+  double? _relativeStartPointX;
 
   static final Animatable<double> _threeQuarterTween = Tween<double>(
     begin: 0.0,
@@ -192,9 +161,6 @@ class AiryMultiPullState extends State<AiryMultiPull>
   @override
   void didUpdateWidget(covariant AiryMultiPull oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.color != widget.color) {
-      _setupColorTween();
-    }
   }
 
   @override
@@ -206,8 +172,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
   }
 
   void _setupColorTween() {
-    _effectiveValueColor =
-        widget.color ?? Theme.of(context).colorScheme.primary;
+    _effectiveValueColor = Theme.of(context).colorScheme.primary;
     final Color color = _effectiveValueColor;
     if (color.alpha == 0x00) {
       _valueColor = AlwaysStoppedAnimation<Color>(color);
@@ -230,8 +195,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
     return ((notification is ScrollStartNotification &&
                 notification.dragDetails != null) ||
             (notification is ScrollUpdateNotification &&
-                notification.dragDetails != null &&
-                widget.triggerMode == RefreshIndicatorTriggerMode.anywhere)) &&
+                notification.dragDetails != null)) &&
         ((notification.metrics.axisDirection == AxisDirection.up &&
                 notification.metrics.extentAfter == 0.0) ||
             (notification.metrics.axisDirection == AxisDirection.down &&
@@ -239,8 +203,6 @@ class AiryMultiPullState extends State<AiryMultiPull>
         _status == null &&
         _start(notification.metrics.axisDirection);
   }
-
-  double? _relativeStartPointX;
 
   /// スクロール通知を処理し、プルダウン操作を検出する
   bool _handleScrollNotification(ScrollNotification notification) {
@@ -288,8 +250,6 @@ class AiryMultiPullState extends State<AiryMultiPull>
       widget.onStatusChange?.call(_status);
     });
 
-    // 初期ドラッグオフセットを記録（スクロール開始位置）
-    _initialDragOffset = 0.0;
     _dragOffset = 0.0;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -720,6 +680,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
                         return Stack(
                           alignment: Alignment.center,
                           children: [
+                            // ターゲットインジケーターの表示
                             AnimatedBuilder(
                               animation: _targetIndicatorPositionXController,
                               builder: (context, child) => Transform.translate(
@@ -743,6 +704,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
                                 ),
                               ),
                             ),
+                            // カスタムインジケーターまたはプログレスインジケーターの表示
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 800),
                               reverseDuration:
@@ -753,16 +715,11 @@ class AiryMultiPullState extends State<AiryMultiPull>
                                         RefreshIndicatorStatus.done
                                       ].contains(_status)
                                   ? RefreshProgressIndicator(
-                                      semanticsLabel: widget.semanticsLabel ??
-                                          MaterialLocalizations.of(context)
-                                              .refreshIndicatorSemanticLabel,
-                                      semanticsValue: widget.semanticsValue,
                                       value: showIndeterminateIndicator
                                           ? null
                                           : _value.value,
                                       valueColor: _valueColor,
-                                      backgroundColor: widget.backgroundColor,
-                                      strokeWidth: widget.strokeWidth,
+                                      strokeWidth: 2.0,
                                       elevation: widget.elevation,
                                     )
                                   : Row(
