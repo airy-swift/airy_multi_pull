@@ -36,7 +36,7 @@ enum RefreshIndicatorStatus {
 }
 
 /// 複数のプルターゲットを持つカスタムリフレッシュインジケータウィジェット
-/// ユーザーは下方向にスクロールし、複数のアクションターゲットから選択できる
+/// ユーザーは上部からのプルダウンまたは下部からのプルアップで、複数のアクションターゲットから選択できる
 class AiryMultiPull extends StatefulWidget {
   /// AiryMultiPullウィジェットを作成する
   const AiryMultiPull({
@@ -50,7 +50,14 @@ class AiryMultiPull extends StatefulWidget {
     this.onArmed,
     this.targetIndicator,
     this.dragRatio,
-    required this.customIndicators,
+    // プルダウン用のプロパティ
+    this.pullDownCustomIndicators = const [],
+    this.pullDownTargetIndicator,
+    // プルアップ用のプロパティ
+    this.pullUpCustomIndicators = const [],
+    this.pullUpTargetIndicator,
+    // 後方互換性のため残す（非推奨）
+    this.customIndicators = const [],
     this.circleMoveDuration = const Duration(milliseconds: 300),
     this.circleMoveCurve = Curves.easeInOut,
   }) : assert(elevation >= 0.0);
@@ -77,13 +84,26 @@ class AiryMultiPull extends StatefulWidget {
   /// インジケータの影の高さ
   final double elevation;
 
-  /// ターゲットインジケータウィジェット
+  /// ターゲットインジケータウィジェット（後方互換性のため残す）
   final Widget? targetIndicator;
 
   /// ドラッグの比率
   final double? dragRatio;
 
-  /// カスタムインジケータのリスト
+  /// プルダウン用のカスタムインジケータのリスト
+  final List<PullTarget> pullDownCustomIndicators;
+
+  /// プルダウン用のターゲットインジケータウィジェット
+  final Widget? pullDownTargetIndicator;
+
+  /// プルアップ用のカスタムインジケータのリスト
+  final List<PullTarget> pullUpCustomIndicators;
+
+  /// プルアップ用のターゲットインジケータウィジェット
+  final Widget? pullUpTargetIndicator;
+
+  /// カスタムインジケータのリスト（後方互換性のため残す、非推奨）
+  @Deprecated('Use pullDownCustomIndicators and pullUpCustomIndicators instead')
   final List<PullTarget> customIndicators;
 
   /// サークル移動アニメーションの時間
@@ -193,16 +213,33 @@ class AiryMultiPullState extends State<AiryMultiPull>
   }
 
   bool _shouldStart(ScrollNotification notification) {
-    return ((notification is ScrollStartNotification &&
+    if (!((notification is ScrollStartNotification &&
                 notification.dragDetails != null) ||
             (notification is ScrollUpdateNotification &&
-                notification.dragDetails != null)) &&
-        // 画面下部から上方向へのプルアップを検出
-        // ListViewが最下部にある時（extentAfter == 0.0）にプルアップを検出
-        (notification.metrics.axisDirection == AxisDirection.down &&
-                notification.metrics.extentAfter == 0.0) &&
-        _status == null &&
-        _start(notification.metrics.axisDirection);
+                notification.dragDetails != null))) {
+      return false;
+    }
+
+    if (_status != null) {
+      return false;
+    }
+
+    // プルダウンとプルアップの検出条件を正しく修正
+    // プルダウン：リストの一番上(extentBefore == 0.0)で下方向にドラッグ
+    bool shouldStartPullDown = notification.metrics.axisDirection == AxisDirection.down &&
+        notification.metrics.extentBefore == 0.0;
+    
+    // プルアップ：リストの一番下(extentAfter == 0.0)で下方向にドラッグ
+    bool shouldStartPullUp = notification.metrics.axisDirection == AxisDirection.down &&
+        notification.metrics.extentAfter == 0.0;
+
+    if (shouldStartPullDown) {
+      return _start(AxisDirection.down);
+    } else if (shouldStartPullUp) {
+      return _start(AxisDirection.up);
+    }
+
+    return false;
   }
 
   /// スクロール通知を処理し、プルダウン操作を検出する
@@ -263,7 +300,8 @@ class AiryMultiPullState extends State<AiryMultiPull>
   /// カスタムインジケータの位置を計算する
   void _calculateCustomIndicatorPositions() {
     try {
-      _customIndicatorXCenters = widget.customIndicators.map((indicator) {
+      final currentIndicators = _currentCustomIndicators;
+      _customIndicatorXCenters = currentIndicators.map((indicator) {
         try {
           final key = indicator.key as GlobalKey;
           // コンテキストがnullかチェック
@@ -300,8 +338,8 @@ class AiryMultiPullState extends State<AiryMultiPull>
   /// スクロール方向を検出する
   bool? _detectScrollDirection(ScrollNotification notification) {
     return switch (notification.metrics.axisDirection) {
-      // 下部からのプルアップの場合は下部にインジケータを表示
-      AxisDirection.down || AxisDirection.up => false,
+      // 現在設定されているインジケータ位置を維持
+      AxisDirection.down || AxisDirection.up => _isIndicatorAtTop,
       AxisDirection.left || AxisDirection.right => null,
     };
   }
@@ -353,11 +391,13 @@ class AiryMultiPullState extends State<AiryMultiPull>
         _status == RefreshIndicatorStatus.armed) {
       final double oldDragOffset = _dragOffset!;
 
-      // 下部からのプルアップの場合、overscrollは通常負の値で来る
+      // プルダウンとプルアップの両方に対応したオーバースクロール値処理
       double overscrollValue = notification.overscroll;
-      if (notification.metrics.axisDirection == AxisDirection.down &&
-          notification.metrics.extentAfter == 0.0) {
-        // 下部でのオーバースクロールの場合、負の値を正の値に変換
+      if (_isIndicatorAtTop!) {
+        // プルダウン（上部表示）：上部で下方向オーバースクロール（正の値）
+        overscrollValue = overscrollValue;
+      } else {
+        // プルアップ（下部表示）：下部で下方向オーバースクロール（負の値を正の値に変換）
         overscrollValue = -overscrollValue;
       }
 
@@ -396,12 +436,23 @@ class AiryMultiPullState extends State<AiryMultiPull>
   /// ドラッグオフセットを更新する
   void _updateDragOffset(AxisDirection direction, double delta,
       {bool isOverscroll = false}) {
-    // 下部からのプルアップの場合、常に正の値でドラッグオフセットを増加
-    if (direction == AxisDirection.down && !_isIndicatorAtTop!) {
-      _dragOffset = _dragOffset! + delta.abs();
+    // インジケータの位置に基づいて適切な計算を行う
+    if (_isIndicatorAtTop!) {
+      // プルダウン（上部表示）の場合：上部で下方向にドラッグ
+      if (direction == AxisDirection.down) {
+        _dragOffset = _dragOffset! + delta.abs();
+      } else {
+        // 戻る方向（上方向）
+        _dragOffset = _dragOffset! - delta.abs();
+      }
     } else {
-      // その他の場合（戻る方向など）
-      _dragOffset = _dragOffset! - delta.abs();
+      // プルアップ（下部表示）の場合：下部で下方向にドラッグ
+      if (direction == AxisDirection.down) {
+        _dragOffset = _dragOffset! + delta.abs();
+      } else {
+        // 戻る方向（上方向）
+        _dragOffset = _dragOffset! - delta.abs();
+      }
     }
 
     // ドラッグオフセットが負の値にならないようにする
@@ -410,7 +461,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
     }
 
     // デバッグ情報（必要に応じてコメントアウト）
-    // print('Drag offset: $_dragOffset, delta: $delta, direction: $direction, isOverscroll: $isOverscroll');
+    // print('Drag offset: $_dragOffset, delta: $delta, direction: $direction, isOverscroll: $isOverscroll, atTop: $_isIndicatorAtTop');
   }
 
   /// スクロール終了時の処理（指を離した時）
@@ -492,11 +543,11 @@ class AiryMultiPullState extends State<AiryMultiPull>
     assert(_dragOffset == null);
     switch (direction) {
       case AxisDirection.down:
-        // 下部でのプルアップ操作
-        _isIndicatorAtTop = false;
-      case AxisDirection.up:
-        // 上部でのプルダウン操作（現在は使用しない）
+        // プルダウン操作（上部に表示）
         _isIndicatorAtTop = true;
+      case AxisDirection.up:
+        // プルアップ操作（下部に表示）
+        _isIndicatorAtTop = false;
       case AxisDirection.left:
       case AxisDirection.right:
         _isIndicatorAtTop = null;
@@ -572,8 +623,9 @@ class AiryMultiPullState extends State<AiryMultiPull>
     assert(_status != RefreshIndicatorStatus.refresh);
     assert(_status != RefreshIndicatorStatus.snap);
 
-    // カスタムインジケータが空の場合は早期リターン
-    if (widget.customIndicators.isEmpty) {
+    // 現在のカスタムインジケータが空の場合は早期リターン
+    final currentIndicators = _currentCustomIndicators;
+    if (currentIndicators.isEmpty) {
       final Completer<void> completer = Completer<void>();
       _pendingRefreshFuture = completer.future;
       completer.complete();
@@ -598,8 +650,8 @@ class AiryMultiPullState extends State<AiryMultiPull>
         // 選択されたターゲットのコールバックを実行
         // 安全のため範囲チェックを追加
         final targetIndex =
-            _previousTargetIndex.clamp(0, widget.customIndicators.length - 1);
-        final targetPullCallback = widget.customIndicators[targetIndex].onPull;
+            _previousTargetIndex.clamp(0, currentIndicators.length - 1);
+        final targetPullCallback = currentIndicators[targetIndex].onPull;
         final FutureOr<void> refreshResult = targetPullCallback();
 
         // コールバック完了時の処理
@@ -625,15 +677,52 @@ class AiryMultiPullState extends State<AiryMultiPull>
   /// プログラムからリフレッシュインジケータを表示する
   ///
   /// [atTop] インジケータを上部に表示するかどうか
-  Future<void> show({bool atTop = false}) {
+  Future<void> show({bool atTop = true}) {
     if (_status != RefreshIndicatorStatus.refresh &&
         _status != RefreshIndicatorStatus.snap) {
       if (_status == null) {
-        _start(atTop ? AxisDirection.up : AxisDirection.down);
+        _start(atTop ? AxisDirection.down : AxisDirection.up);
       }
       _show();
     }
     return _pendingRefreshFuture;
+  }
+
+  /// 現在のプル方向に応じてカスタムインジケータのリストを取得
+  List<PullTarget> get _currentCustomIndicators {
+    if (_isIndicatorAtTop == null) {
+      // ignore: deprecated_member_use_from_same_package
+      if (widget.customIndicators.isNotEmpty) {
+        // ignore: deprecated_member_use_from_same_package
+        return widget.customIndicators;
+      }
+      return [];
+    }
+    
+    if (_isIndicatorAtTop!) {
+      return widget.pullDownCustomIndicators.isNotEmpty 
+          ? widget.pullDownCustomIndicators 
+          // ignore: deprecated_member_use_from_same_package
+          : widget.customIndicators;
+    } else {
+      return widget.pullUpCustomIndicators.isNotEmpty 
+          ? widget.pullUpCustomIndicators 
+          // ignore: deprecated_member_use_from_same_package
+          : widget.customIndicators;
+    }
+  }
+
+  /// 現在のプル方向に応じてターゲットインジケータを取得
+  Widget? get _currentTargetIndicator {
+    if (_isIndicatorAtTop == null) {
+      return widget.targetIndicator;
+    }
+    
+    if (_isIndicatorAtTop!) {
+      return widget.pullDownTargetIndicator ?? widget.targetIndicator;
+    } else {
+      return widget.pullUpTargetIndicator ?? widget.targetIndicator;
+    }
   }
 
   @override
@@ -700,7 +789,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
                                     0),
                                 child: Visibility(
                                   visible: !showIndeterminateIndicator,
-                                  child: widget.targetIndicator ??
+                                  child: _currentTargetIndicator ??
                                       Container(
                                         width: 80,
                                         height: 80,
@@ -733,7 +822,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
                                   : Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceEvenly,
-                                      children: widget.customIndicators,
+                                      children: _currentCustomIndicators,
                                     ),
                             ),
                           ],

@@ -31,11 +31,15 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-final firstKey = GlobalKey();
-final secondKey = GlobalKey();
-final thirdKey = GlobalKey();
-final fourthKey = GlobalKey();
-final fifthKey = GlobalKey();
+// プルダウン用のキー
+final pullDownFirstKey = GlobalKey();
+final pullDownSecondKey = GlobalKey();
+final pullDownThirdKey = GlobalKey();
+
+// プルアップ用のキー
+final pullUpFirstKey = GlobalKey();
+final pullUpSecondKey = GlobalKey();
+final pullUpThirdKey = GlobalKey();
 
 class _MyHomePageState extends State<MyHomePage> {
   @override
@@ -51,50 +55,85 @@ class _MyHomePageState extends State<MyHomePage> {
           await Future<void>.delayed(const Duration(milliseconds: 130));
           HapticFeedback.lightImpact();
         },
-        customIndicators: [
+        // プルダウン用のインジケータ（上部に表示）
+        pullDownCustomIndicators: [
           PullTarget(
-            key: firstKey,
+            key: pullDownFirstKey,
             onPull: () async {
-              await Future<void>.delayed(const Duration(seconds: 2));
-              debugPrint('First');
+              await Future<void>.delayed(const Duration(seconds: 1));
+              debugPrint('🔵 プルダウン: 追加アクションが実行されました');
             },
-            child: Icon(Icons.add),
+            child: Icon(Icons.add, color: Colors.blue),
           ),
           PullTarget(
-            key: secondKey,
+            key: pullDownSecondKey,
             onPull: () {
-              debugPrint('Second');
+              debugPrint('🟢 プルダウン: 更新アクションが実行されました');
             },
-            child: Icon(Icons.refresh),
+            child: Icon(Icons.refresh, color: Colors.green),
           ),
           PullTarget(
-            key: thirdKey,
+            key: pullDownThirdKey,
             onPull: () {
-              debugPrint('Third');
+              debugPrint('🟠 プルダウン: 設定アクションが実行されました');
             },
-            child: Icon(Icons.delete),
-          ),
-          PullTarget(
-            key: fourthKey,
-            onPull: () async {
-              debugPrint('Fourth');
-            },
-            child: Icon(Icons.refresh),
-          ),
-          PullTarget(
-            key: fifthKey,
-            onPull: () async {
-              debugPrint('Fifth');
-            },
-            child: Icon(Icons.delete),
+            child: Icon(Icons.settings, color: Colors.orange),
           ),
         ],
+        // プルアップ用のインジケータ（下部に表示）
+        pullUpCustomIndicators: [
+          PullTarget(
+            key: pullUpFirstKey,
+            onPull: () async {
+              await Future<void>.delayed(const Duration(seconds: 1));
+              debugPrint('🔴 プルアップ: 削除アクションが実行されました');
+            },
+            child: Icon(Icons.delete, color: Colors.red),
+          ),
+          PullTarget(
+            key: pullUpSecondKey,
+            onPull: () {
+              debugPrint('🩷 プルアップ: お気に入りアクションが実行されました');
+            },
+            child: Icon(Icons.favorite, color: Colors.pink),
+          ),
+          PullTarget(
+            key: pullUpThirdKey,
+            onPull: () {
+              debugPrint('🟣 プルアップ: 共有アクションが実行されました');
+            },
+            child: Icon(Icons.share, color: Colors.purple),
+          ),
+        ],
+        // プルダウン用のターゲットインジケータ
+        pullDownTargetIndicator: Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: Colors.blue.withAlpha(76),
+            shape: BoxShape.circle,
+          ),
+        ),
+        // プルアップ用のターゲットインジケータ
+        pullUpTargetIndicator: Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: Colors.red.withAlpha(76),
+            shape: BoxShape.circle,
+          ),
+        ),
         dragRatio: 1,
         child: ListView.builder(
           itemCount: 20,
           itemBuilder: (context, index) {
             return ListTile(
               title: Text('Item $index'),
+              subtitle: index == 0 
+                ? Text('ここで下にプルダウンしてアクション選択') 
+                : index == 19 
+                  ? Text('ここで下にプルアップしてアクション選択') 
+                  : null,
             );
           },
         ),
