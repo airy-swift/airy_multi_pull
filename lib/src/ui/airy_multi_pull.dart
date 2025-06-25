@@ -197,10 +197,10 @@ class AiryMultiPullState extends State<AiryMultiPull>
                 notification.dragDetails != null) ||
             (notification is ScrollUpdateNotification &&
                 notification.dragDetails != null)) &&
-        ((notification.metrics.axisDirection == AxisDirection.up &&
-                notification.metrics.extentAfter == 0.0) ||
-            (notification.metrics.axisDirection == AxisDirection.down &&
-                notification.metrics.extentBefore == 0.0)) &&
+        // 画面下部から上方向へのプルアップを検出
+        // ListViewが最下部にある時（extentAfter == 0.0）にプルアップを検出
+        (notification.metrics.axisDirection == AxisDirection.down &&
+                notification.metrics.extentAfter == 0.0) &&
         _status == null &&
         _start(notification.metrics.axisDirection);
   }
@@ -300,7 +300,8 @@ class AiryMultiPullState extends State<AiryMultiPull>
   /// スクロール方向を検出する
   bool? _detectScrollDirection(ScrollNotification notification) {
     return switch (notification.metrics.axisDirection) {
-      AxisDirection.down || AxisDirection.up => true,
+      // 下部からのプルアップの場合は下部にインジケータを表示
+      AxisDirection.down || AxisDirection.up => false,
       AxisDirection.left || AxisDirection.right => null,
     };
   }
@@ -352,8 +353,16 @@ class AiryMultiPullState extends State<AiryMultiPull>
         _status == RefreshIndicatorStatus.armed) {
       final double oldDragOffset = _dragOffset!;
 
+      // 下部からのプルアップの場合、overscrollは通常負の値で来る
+      double overscrollValue = notification.overscroll;
+      if (notification.metrics.axisDirection == AxisDirection.down &&
+          notification.metrics.extentAfter == 0.0) {
+        // 下部でのオーバースクロールの場合、負の値を正の値に変換
+        overscrollValue = -overscrollValue;
+      }
+
       _updateDragOffset(
-          notification.metrics.axisDirection, notification.overscroll,
+          notification.metrics.axisDirection, overscrollValue,
           isOverscroll: true);
 
       // キャンセル判定: Y軸方向でスクロール開始位置付近に戻ったか
@@ -387,10 +396,12 @@ class AiryMultiPullState extends State<AiryMultiPull>
   /// ドラッグオフセットを更新する
   void _updateDragOffset(AxisDirection direction, double delta,
       {bool isOverscroll = false}) {
-    if (direction == AxisDirection.down) {
-      _dragOffset = _dragOffset! - delta;
-    } else if (direction == AxisDirection.up) {
-      _dragOffset = _dragOffset! + delta;
+    // 下部からのプルアップの場合、常に正の値でドラッグオフセットを増加
+    if (direction == AxisDirection.down && !_isIndicatorAtTop!) {
+      _dragOffset = _dragOffset! + delta.abs();
+    } else {
+      // その他の場合（戻る方向など）
+      _dragOffset = _dragOffset! - delta.abs();
     }
 
     // ドラッグオフセットが負の値にならないようにする
@@ -399,7 +410,7 @@ class AiryMultiPullState extends State<AiryMultiPull>
     }
 
     // デバッグ情報（必要に応じてコメントアウト）
-    // print('Drag offset: $_dragOffset, delta: $delta, direction: $direction');
+    // print('Drag offset: $_dragOffset, delta: $delta, direction: $direction, isOverscroll: $isOverscroll');
   }
 
   /// スクロール終了時の処理（指を離した時）
@@ -481,7 +492,10 @@ class AiryMultiPullState extends State<AiryMultiPull>
     assert(_dragOffset == null);
     switch (direction) {
       case AxisDirection.down:
+        // 下部でのプルアップ操作
+        _isIndicatorAtTop = false;
       case AxisDirection.up:
+        // 上部でのプルダウン操作（現在は使用しない）
         _isIndicatorAtTop = true;
       case AxisDirection.left:
       case AxisDirection.right:
@@ -611,11 +625,11 @@ class AiryMultiPullState extends State<AiryMultiPull>
   /// プログラムからリフレッシュインジケータを表示する
   ///
   /// [atTop] インジケータを上部に表示するかどうか
-  Future<void> show({bool atTop = true}) {
+  Future<void> show({bool atTop = false}) {
     if (_status != RefreshIndicatorStatus.refresh &&
         _status != RefreshIndicatorStatus.snap) {
       if (_status == null) {
-        _start(atTop ? AxisDirection.down : AxisDirection.up);
+        _start(atTop ? AxisDirection.up : AxisDirection.down);
       }
       _show();
     }

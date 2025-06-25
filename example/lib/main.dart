@@ -91,7 +91,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ],
         dragRatio: 1,
         child: ListView.builder(
-          itemCount: 1000,
+          itemCount: 20,
           itemBuilder: (context, index) {
             return ListTile(
               title: Text('Item $index'),

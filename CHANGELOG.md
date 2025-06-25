@@ -1,8 +1,7 @@
 ## 0.0.3
 
-* 非推奨のColor.alphaプロパティをColor.aに置き換え
-* アーミング状態の判定処理を改善してテスト環境での動作を安定化
-* テストコードの不要なキャストを削除
+* Improved the armed state detection logic to stabilize behavior in the test environment 
+* Removed unnecessary casts in the test code
 
 ## 0.0.2
 
