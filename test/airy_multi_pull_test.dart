@@ -19,7 +19,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: AiryMultiPull(
-              customIndicators: [
+              pullDownCustomIndicators: [
                 PullTarget(
                   key: firstKey,
                   onPull: () {
@@ -70,6 +70,129 @@ void main() {
       expect(secondPullCount, 0);
     });
 
+    testWidgets('プルアップ操作のテスト', (WidgetTester tester) async {
+      // コールバックの呼び出しを追跡するためのカウンター
+      int pullUpActionCount = 0;
+
+      // テスト用のGlobalKey
+      final pullUpKey = GlobalKey();
+
+      // テスト用ウィジェットを構築
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AiryMultiPull(
+              pullUpCustomIndicators: [
+                PullTarget(
+                  key: pullUpKey,
+                  onPull: () {
+                    pullUpActionCount++;
+                    return Future.value();
+                  },
+                  child: const Icon(Icons.arrow_upward),
+                ),
+              ],
+              child: ListView.builder(
+                itemCount: 20,
+                itemBuilder: (context, index) => ListTile(
+                  title: Text('Item $index'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // 初期状態では、プルインジケータは表示されていないはず
+      expect(find.byIcon(Icons.arrow_upward), findsNothing);
+
+      // スクロールして最下部に移動
+      await tester.drag(find.text('Item 0'), const Offset(0, -2000));
+      await tester.pumpAndSettle();
+
+      // プルアップ操作をシミュレート（上方向へのドラッグ）
+      await tester.drag(find.text('Item 19'), const Offset(0, -300));
+      await tester.pump();
+
+      // Armed状態になるはず
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // アイコンが表示されているか確認
+      expect(find.byIcon(Icons.arrow_upward), findsOneWidget);
+
+      // 指を離してアクションを実行
+      await tester.pumpAndSettle();
+
+      // プルアップアクションが実行されたことを確認（実際の動作では複数回呼び出される可能性がある）
+      expect(pullUpActionCount, greaterThan(0));
+    });
+
+    testWidgets('プルダウンとプルアップの両方が設定されている場合のテスト', (WidgetTester tester) async {
+      // コールバックの呼び出しを追跡するためのカウンター
+      int pullDownCount = 0;
+      int pullUpCount = 0;
+
+      // テスト用のGlobalKey
+      final pullDownKey = GlobalKey();
+      final pullUpKey = GlobalKey();
+
+      // テスト用ウィジェットを構築
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AiryMultiPull(
+              pullDownCustomIndicators: [
+                PullTarget(
+                  key: pullDownKey,
+                  onPull: () {
+                    pullDownCount++;
+                    return Future.value();
+                  },
+                  child: const Icon(Icons.download),
+                ),
+              ],
+              pullUpCustomIndicators: [
+                PullTarget(
+                  key: pullUpKey,
+                  onPull: () {
+                    pullUpCount++;
+                    return Future.value();
+                  },
+                  child: const Icon(Icons.upload),
+                ),
+              ],
+              child: ListView.builder(
+                itemCount: 20,
+                itemBuilder: (context, index) => ListTile(
+                  title: Text('Item $index'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // プルダウン操作をテスト
+      await tester.drag(find.text('Item 0'), const Offset(0, 300));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byIcon(Icons.download), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(pullDownCount, 1);
+      expect(pullUpCount, 0);
+
+      // プルアップ操作をテスト（最下部に移動してから）
+      await tester.drag(find.text('Item 0'), const Offset(0, -2000));
+      await tester.pumpAndSettle();
+      await tester.drag(find.text('Item 19'), const Offset(0, -300));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byIcon(Icons.upload), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(pullDownCount, 1);
+      expect(pullUpCount, 1);
+    });
+
     testWidgets('キャンセル操作のテスト - スクロールを戻す', (WidgetTester tester) async {
       // コールバックの呼び出しを追跡するためのカウンター
       int pullCount = 0;
@@ -82,7 +205,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: AiryMultiPull(
-              customIndicators: [
+              pullDownCustomIndicators: [
                 PullTarget(
                   key: testKey,
                   onPull: () {
@@ -139,7 +262,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: AiryMultiPull(
-              customIndicators: [
+              pullDownCustomIndicators: [
                 PullTarget(
                   key: firstKey,
                   onPull: () {
@@ -202,7 +325,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: AiryMultiPull(
-              customIndicators: [], // 空のリスト
+              pullDownCustomIndicators: [], // 空のリスト
               child: ListView.builder(
                 itemCount: 20,
                 itemBuilder: (context, index) => ListTile(
@@ -237,7 +360,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: AiryMultiPull(
-              customIndicators: [
+              pullDownCustomIndicators: [
                 PullTarget(
                   key: testKey,
                   onPull: () async {
@@ -293,7 +416,7 @@ void main() {
               onStatusChange: (status) {
                 statusChanges.add(status);
               },
-              customIndicators: [
+              pullDownCustomIndicators: [
                 PullTarget(
                   key: testKey,
                   onPull: () => Future.value(),
@@ -339,7 +462,7 @@ void main() {
                 // Armed状態になったときにカウントを増やす
                 armedCallCount++;
               },
-              customIndicators: [
+              pullDownCustomIndicators: [
                 PullTarget(
                   key: testKey,
                   onPull: () => Future.value(),
@@ -372,6 +495,199 @@ void main() {
 
       // Armed状態は一度だけなので、カウントは変わらないはず
       expect(armedCallCount, 1);
+    });
+
+    testWidgets('カスタムターゲットインジケータウィジェットのテスト', (WidgetTester tester) async {
+      // コールバックの呼び出しを追跡
+      int pullCount = 0;
+
+      // テスト用のGlobalKey
+      final testKey = GlobalKey();
+
+      // テスト用ウィジェットを構築
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AiryMultiPull(
+              pullDownTargetIndicator: const CircularProgressIndicator(),
+              pullDownCustomIndicators: [
+                PullTarget(
+                  key: testKey,
+                  onPull: () {
+                    pullCount++;
+                    return Future.value();
+                  },
+                  child: const Icon(Icons.add),
+                ),
+              ],
+              child: ListView.builder(
+                itemCount: 20,
+                itemBuilder: (context, index) => ListTile(
+                  title: Text('Item $index'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // プルダウン操作をシミュレート
+      await tester.drag(find.text('Item 0'), const Offset(0, 300));
+      await tester.pump();
+
+      // カスタムターゲットインジケータが表示されているか確認
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      // 指を離してアクションを実行
+      await tester.pumpAndSettle();
+
+      // アクションが実行されたことを確認
+      expect(pullCount, 1);
+    });
+
+    testWidgets('後方互換性テスト - 非推奨のcustomIndicatorsプロパティ', (WidgetTester tester) async {
+      // コールバックの呼び出しを追跡するためのカウンター
+      int pullCount = 0;
+
+      // テスト用のGlobalKey
+      final testKey = GlobalKey();
+
+      // 後方互換性のため、非推奨のcustomIndicatorsを使用したテスト
+      // ignore: deprecated_member_use
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AiryMultiPull(
+              customIndicators: [
+                PullTarget(
+                  key: testKey,
+                  onPull: () {
+                    pullCount++;
+                    return Future.value();
+                  },
+                  child: const Icon(Icons.add),
+                ),
+              ],
+              child: ListView.builder(
+                itemCount: 20,
+                itemBuilder: (context, index) => ListTile(
+                  title: Text('Item $index'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // プルダウン操作をシミュレート
+      await tester.drag(find.text('Item 0'), const Offset(0, 300));
+      await tester.pump();
+
+      // アイコンが表示されているか確認
+      expect(find.byIcon(Icons.add), findsOneWidget);
+
+      // 指を離してアクションを実行
+      await tester.pumpAndSettle();
+
+      // アクションが実行されたことを確認
+      expect(pullCount, 1);
+    });
+
+    testWidgets('circleMoveDurationとcircleMoveCurveのカスタマイズテスト', (WidgetTester tester) async {
+      // コールバックの呼び出しを追跡するためのカウンター
+      int pullCount = 0;
+
+      // テスト用のGlobalKey
+      final testKey = GlobalKey();
+
+      // カスタムアニメーション設定でテスト
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AiryMultiPull(
+              circleMoveDuration: const Duration(milliseconds: 100),
+              circleMoveCurve: Curves.bounceIn,
+              pullDownCustomIndicators: [
+                PullTarget(
+                  key: testKey,
+                  onPull: () {
+                    pullCount++;
+                    return Future.value();
+                  },
+                  child: const Icon(Icons.add),
+                ),
+              ],
+              child: ListView.builder(
+                itemCount: 20,
+                itemBuilder: (context, index) => ListTile(
+                  title: Text('Item $index'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // プルダウン操作をシミュレート
+      await tester.drag(find.text('Item 0'), const Offset(0, 300));
+      await tester.pump();
+
+      // アイコンが表示されているか確認
+      expect(find.byIcon(Icons.add), findsOneWidget);
+
+      // 指を離してアクションを実行
+      await tester.pumpAndSettle();
+
+      // アクションが実行されたことを確認
+      expect(pullCount, 1);
+    });
+
+    testWidgets('ドラッグ比率(dragRatio)のカスタマイズテスト', (WidgetTester tester) async {
+      // コールバックの呼び出しを追跡するためのカウンター
+      int pullCount = 0;
+
+      // テスト用のGlobalKey
+      final testKey = GlobalKey();
+
+      // カスタムドラッグ比率でテスト
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AiryMultiPull(
+              dragRatio: 0.5, // デフォルトより敏感に設定
+              pullDownCustomIndicators: [
+                PullTarget(
+                  key: testKey,
+                  onPull: () {
+                    pullCount++;
+                    return Future.value();
+                  },
+                  child: const Icon(Icons.add),
+                ),
+              ],
+              child: ListView.builder(
+                itemCount: 20,
+                itemBuilder: (context, index) => ListTile(
+                  title: Text('Item $index'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // プルダウン操作をシミュレート（小さなドラッグでも動作するはず）
+      await tester.drag(find.text('Item 0'), const Offset(0, 150));
+      await tester.pump();
+
+      // アイコンが表示されているか確認
+      expect(find.byIcon(Icons.add), findsOneWidget);
+
+      // 指を離してアクションを実行
+      await tester.pumpAndSettle();
+
+      // アクションが実行されたことを確認
+      expect(pullCount, 1);
     });
   });
 }

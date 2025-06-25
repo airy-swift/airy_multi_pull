@@ -401,14 +401,25 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
     }
   }
 
+  double? downDragOffset;
+
   /// プルダウンのスクロール更新処理
   bool _handlePullDownScrollUpdate(ScrollUpdateNotification notification) {
     // インジケーター表示中は位置チェックを緩和
     // 完全に無効化して処理を継続
-
-    if ((notification.scrollDelta ?? 0) > 0) {
+    final delta = notification.scrollDelta ?? 0;
+    if (delta > 0) {
+      if (notification.dragDetails?.globalPosition.dy == null) {
+        return false;
+      }
+      downDragOffset ??= notification.dragDetails!.globalPosition.dy;
+      if (downDragOffset! > (notification.dragDetails!.globalPosition.dy + (widget.displacement * 2))) {
+        _dismiss(RefreshIndicatorStatus.canceled);
+        downDragOffset = null;
+      }
       return false;
     }
+
     _relativeStartPointX ??= notification.dragDetails?.globalPosition.dx;
 
     final double oldDragOffset = _dragOffset!;
@@ -427,14 +438,25 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
     return false;
   }
 
+  double? upDragOffset;
+
   /// プルアップのスクロール更新処理
   bool _handlePullUpScrollUpdate(ScrollUpdateNotification notification) {
     // インジケーター表示中は位置チェックを緩和
     // 完全に無効化して処理を継続
-
-    if ((notification.scrollDelta ?? 0) < 0) {
+    final delta = notification.scrollDelta ?? 0;
+    if (delta < 0) {
+      if (notification.dragDetails?.globalPosition.dy == null) {
+        return false;
+      }
+      upDragOffset ??= notification.dragDetails!.globalPosition.dy;
+      if (upDragOffset! < (notification.dragDetails!.globalPosition.dy - (widget.displacement * 2))) {
+        _dismiss(RefreshIndicatorStatus.canceled);
+        upDragOffset = null;
+      }
       return false;
     }
+
     _relativeStartPointX ??= notification.dragDetails?.globalPosition.dx;
 
     final double oldDragOffset = _dragOffset!;
@@ -475,7 +497,6 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
 
     // 下方向のオーバースクロール（正の値）の場合のみ処理
     // 条件を緩和：0以下ではなく負の値のみ除外
-    print('_handlePullDownOverscroll: ${notification.overscroll}');
     if (notification.overscroll > 0) {
       return false;
     }
@@ -504,7 +525,6 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
 
     // 上方向のオーバースクロール（負の値）の場合のみ処理
     // 条件を緩和：0以上ではなく正の値のみ除外
-    print('_handlePullUpOverscroll: ${notification.overscroll}');
     if (notification.overscroll < 0) {
       return false;
     }
@@ -568,9 +588,6 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
     if (_dragOffset! < 0.0) {
       _dragOffset = 0.0;
     }
-
-    // デバッグ情報（必要に応じてコメントアウト）
-    // print('Drag offset: $_dragOffset, delta: $delta, direction: $direction, isOverscroll: $isOverscroll, atTop: $_isIndicatorAtTop');
   }
 
   /// スクロール終了時の処理（指を離した時）
@@ -603,8 +620,6 @@ class AiryMultiPullState extends State<AiryMultiPull> with TickerProviderStateMi
 
     // カスタムインジケータのリストが空の場合は処理をスキップ
     if (_customIndicatorXCenters.isEmpty) {
-      // エラーをログに出力するだけで例外は投げない
-      // print('Warning: Custom indicator centers list is empty');
       return;
     }
 
